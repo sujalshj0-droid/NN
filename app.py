@@ -14,7 +14,7 @@ cfg = {
     "sessionid": "",
     "messages": [],
     "group_name": "",
-    "delay": 25,        # Messages ke beech delay
+    "delay": 25,        # Messages ke beech
     "cycle": 35,        # Har kitne messages ke baad NC + Break
     "break_sec": 40,    # Cycle ke baad break
     "group_delay": 5    # Ek GC se dusre GC mein delay
@@ -40,31 +40,33 @@ def bomber():
     sent_in_cycle = 0
     while state["running"]:
         try:
-            # Automatically fetch all group chats
+            # Fetch all groups
             threads = cl.direct_threads(amount=100)
             groups = [t for t in threads if getattr(t, "is_group", False)]
             
             if not groups:
-                log("⚠ No groups found, retrying...")
+                log("⚠ No groups found, retrying in 30s...")
                 time.sleep(30)
                 continue
 
             log(f"🔄 Found {len(groups)} groups - Starting rotation")
 
             for thread in groups:
-                if not state["running"]: break
+                if not state["running"]: 
+                    break
                 
                 gid = thread.id
-                
+                title = thread.thread_title or "Unknown Group"
+
                 # Send Message
                 msg = random.choice(cfg["messages"])
                 try:
                     cl.direct_send(msg, thread_ids=[gid])
                     sent_in_cycle += 1
                     state["sent"] += 1
-                    log(f"📨 SENT to GC → {thread.thread_title or 'Group'}")
-                except:
-                    log("⚠ Send failed")
+                    log(f"📨 SENT to → {title}")
+                except Exception as e:
+                    log(f"⚠ FAILED in {title} → {str(e)[:50]}")   # Fail hone par bhi continue
 
                 # Group Switch Delay
                 time.sleep(cfg["group_delay"] + random.uniform(1, 3))
@@ -75,7 +77,7 @@ def bomber():
                 for thread in groups:
                     try:
                         cl.direct_thread_change_title(thread.id, new_name)
-                        log(f"💠 NAME CHANGE SUCCESS → {new_name}")
+                        log(f"💠 NAME CHANGE → {new_name}")
                     except:
                         pass
                 log(f"⏳ BREAK {cfg['break_sec']} SECONDS")
@@ -85,7 +87,7 @@ def bomber():
             time.sleep(cfg["delay"])
 
         except Exception as e:
-            log(f"⚠ Error: {str(e)[:60]}")
+            log(f"⚠ Loop Error: {str(e)[:60]}")
             time.sleep(20)
 
 @app.route("/")
@@ -102,7 +104,7 @@ def start():
 
     cfg["sessionid"] = request.form.get("sessionid", "").strip()
     
-    # Single full message mode
+    # Single full message (pura textarea ek hi message)
     raw_text = request.form["messages"].strip()
     cfg["messages"] = [raw_text] if raw_text else []
 
