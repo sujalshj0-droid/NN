@@ -10,15 +10,7 @@ app = Flask(__name__)
 app.secret_key = "sujal_final"
 
 state = {"running": False, "sent": 0, "logs": [], "start_time": None}
-cfg = {
-    "sessionid": "",
-    "messages": [],
-    "group_name": "",
-    "delay": 25,
-    "cycle": 35,
-    "break_sec": 40,
-    "group_delay": 5
-}
+cfg = {"sessionid": "", "messages": [], "delay": 12, "group_delay": 3, "thread_id": None}
 
 def log(msg):
     entry = f"[{time.strftime('%H:%M:%S')}] {msg}"
@@ -28,8 +20,8 @@ def log(msg):
 
 def spam_bot():
     cl = Client()
-    cl.delay_range = [8, 30]
-    
+    cl.delay_range = [6, 18]
+
     try:
         cl.login_by_sessionid(cfg["sessionid"])
         log("✅ LOGIN SUCCESS")
@@ -37,57 +29,43 @@ def spam_bot():
         log(f"❌ LOGIN FAILED → {str(e)[:80]}")
         return
 
-    sent_in_cycle = 0
     while state["running"]:
         try:
-            threads = cl.direct_threads(amount=100)
-            groups = [t for t in threads if getattr(t, "is_group", False)]
-            
+            if cfg["thread_id"]:
+                groups = [type('obj', (object,), {'id': int(cfg["thread_id"]), 'thread_title': 'Specific GC'})()]
+                log("🎯 Specific Thread ID mode")
+            else:
+                threads = cl.direct_threads(amount=100)
+                groups = [t for t in threads if getattr(t, "is_group", False)]
+
             if not groups:
-                log("⚠ No groups found, retrying in 30s...")
-                time.sleep(30)
+                log("⚠ No groups found, retrying...")
+                time.sleep(20)
                 continue
 
-            log(f"🔄 Found {len(groups)} groups - Starting rotation")
+            log(f"🔄 Found {len(groups)} groups - Rotation Start")
 
             for thread in groups:
                 if not state["running"]:
                     break
-                
                 gid = thread.id
-                title = thread.thread_title or "Unknown"
+                title = getattr(thread, 'thread_title', 'Unknown')
 
-                # Send Message
                 msg = random.choice(cfg["messages"])
                 try:
                     cl.direct_send(msg, thread_ids=[gid])
-                    sent_in_cycle += 1
                     state["sent"] += 1
                     log(f"📨 SENT to → {title}")
-                except Exception as e:
+                except Exception:
                     log(f"⚠ SEND FAILED in {title} (continuing...)")
 
-                # Group Switch Delay
-                time.sleep(cfg["group_delay"] + random.uniform(1, 3))
-
-            # Name Change + Break
-            if sent_in_cycle >= cfg["cycle"] and cfg["group_name"]:
-                new_name = f"{cfg['group_name']} → {datetime.now().strftime('%I:%M:%S %p')}"
-                for thread in groups:
-                    try:
-                        cl.direct_thread_change_title(thread.id, new_name)
-                        log(f"💠 NAME CHANGE SUCCESS → {new_name}")
-                    except:
-                        log("⚠ NAME CHANGE FAILED (continuing...)")
-                log(f"⏳ BREAK {cfg['break_sec']} SECONDS")
-                time.sleep(cfg["break_sec"])
-                sent_in_cycle = 0
+                time.sleep(cfg["group_delay"] + random.uniform(0.8, 2.2))
 
             time.sleep(cfg["delay"])
 
         except Exception as e:
-            log(f"⚠ MAJOR ERROR: {str(e)[:60]} (continuing loop...)")
-            time.sleep(20)
+            log(f"⚠ MAJOR ERROR: {str(e)[:60]} → Continuing...")
+            time.sleep(15)
 
 @app.route("/")
 def index():
@@ -97,21 +75,19 @@ def index():
 def start():
     global state
     state["running"] = False
-    time.sleep(0.5)
+    time.sleep(0.3)
 
-    state = {"running": True, "sent": 0, "logs": ["🚀 BOT STARTED"], "start_time": time.time()}
+    state = {"running": True, "sent": 0, "logs": ["🚀 SPAM BOT STARTED"], "start_time": time.time()}
 
     cfg["sessionid"] = request.form.get("sessionid", "").strip()
-    raw_text = request.form["messages"].strip()
-    cfg["messages"] = [raw_text] if raw_text else []
-    cfg["group_name"] = request.form.get("group_name", "").strip()
-    cfg["delay"] = float(request.form.get("delay", "25"))
-    cfg["cycle"] = int(request.form.get("cycle", "35"))
-    cfg["break_sec"] = int(request.form.get("break_sec", "40"))
-    cfg["group_delay"] = int(request.form.get("group_delay", "5"))
+    raw = request.form.get("messages", "").strip()
+    cfg["messages"] = [m.strip() for m in raw.replace("---", "\n\n").split("\n\n") if m.strip()] or ["Default spam message"]
+    cfg["delay"] = float(request.form.get("delay", "12"))
+    cfg["group_delay"] = int(request.form.get("group_delay", "3"))
+    cfg["thread_id"] = request.form.get("thread_id", "").strip() or None
 
     threading.Thread(target=spam_bot, daemon=True).start()
-    log("BOT STARTED - Rotating through all groups")
+    log("SPAM BOT STARTED - Continuous Multi GC")
     return jsonify({"ok": True})
 
 @app.route("/stop", methods=["POST"])
