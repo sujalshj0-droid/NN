@@ -13,10 +13,7 @@ state = {"running": False, "sent": 0, "logs": [], "start_time": None}
 cfg = {
     "sessionid": "",
     "messages": [],
-    "group_name": "",
     "delay": 25,
-    "cycle": 35,
-    "break_sec": 40,
     "group_delay": 5
 }
 
@@ -26,7 +23,7 @@ def log(msg):
     if len(state["logs"]) > 500:
         state["logs"] = state["logs"][-500:]
 
-def bomber():
+def spam_bot():
     cl = Client()
     cl.delay_range = [8, 30]
     
@@ -37,18 +34,17 @@ def bomber():
         log(f"❌ LOGIN FAILED → {str(e)[:80]}")
         return
 
-    sent_in_cycle = 0
     while state["running"]:
         try:
             threads = cl.direct_threads(amount=100)
             groups = [t for t in threads if getattr(t, "is_group", False)]
             
             if not groups:
-                log("⚠ No groups found, retrying...")
+                log("⚠ No groups found, retrying in 30s...")
                 time.sleep(30)
                 continue
 
-            log(f"🔄 Found {len(groups)} groups - Starting rotation")
+            log(f"🔄 Found {len(groups)} groups - Starting spam rotation")
 
             for thread in groups:
                 if not state["running"]:
@@ -57,11 +53,9 @@ def bomber():
                 gid = thread.id
                 title = thread.thread_title or "Unknown"
 
-                # Send Message
-                msg = random.choice(cfg["messages"])
+                msg = cfg["messages"][0]
                 try:
                     cl.direct_send(msg, thread_ids=[gid])
-                    sent_in_cycle += 1
                     state["sent"] += 1
                     log(f"📨 SENT to → {title}")
                 except Exception as e:
@@ -70,23 +64,10 @@ def bomber():
                 # Group Switch Delay
                 time.sleep(cfg["group_delay"] + random.uniform(1, 3))
 
-            # Name Change + Break
-            if sent_in_cycle >= cfg["cycle"] and cfg["group_name"]:
-                new_name = f"{cfg['group_name']} → {datetime.now().strftime('%I:%M:%S %p')}"
-                for thread in groups:
-                    try:
-                        cl.direct_thread_change_title(thread.id, new_name)
-                        log(f"💠 NAME CHANGE SUCCESS → {new_name}")
-                    except:
-                        log("⚠ NAME CHANGE FAILED")
-                log(f"⏳ BREAK {cfg['break_sec']} SECONDS")
-                time.sleep(cfg["break_sec"])
-                sent_in_cycle = 0
-
             time.sleep(cfg["delay"])
 
         except Exception as e:
-            log(f"⚠ Loop Error: {str(e)[:60]} (continuing...)")
+            log(f"⚠ Error: {str(e)[:60]} (continuing...)")
             time.sleep(20)
 
 @app.route("/")
@@ -99,19 +80,16 @@ def start():
     state["running"] = False
     time.sleep(0.5)
 
-    state = {"running": True, "sent": 0, "logs": ["🚀 BOT STARTED"], "start_time": time.time()}
+    state = {"running": True, "sent": 0, "logs": ["🚀 SPAM BOT STARTED"], "start_time": time.time()}
 
     cfg["sessionid"] = request.form.get("sessionid", "").strip()
     raw_text = request.form["messages"].strip()
     cfg["messages"] = [raw_text] if raw_text else []
-    cfg["group_name"] = request.form.get("group_name", "").strip()
     cfg["delay"] = float(request.form.get("delay", "25"))
-    cfg["cycle"] = int(request.form.get("cycle", "35"))
-    cfg["break_sec"] = int(request.form.get("break_sec", "40"))
     cfg["group_delay"] = int(request.form.get("group_delay", "5"))
 
-    threading.Thread(target=bomber, daemon=True).start()
-    log("BOT STARTED")
+    threading.Thread(target=spam_bot, daemon=True).start()
+    log("SPAM BOT STARTED - Rotating through all groups")
     return jsonify({"ok": True})
 
 @app.route("/stop", methods=["POST"])
